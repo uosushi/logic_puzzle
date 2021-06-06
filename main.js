@@ -28,6 +28,8 @@ var level1_map = [
 function drawTiles(set_tiles)
 {
 	tiles = set_tiles;
+	context.clearRect(0, 0, 800, 400);
+	star = 0;
 	for (y = 0; y < tiles.length; y++)
 	{
 		for (x = 0; x < tiles[y].length; x++)
@@ -139,6 +141,8 @@ function moveRocket(command, rotate, opt_conditions = -1, opt_paint = -1)
 		if (rocketY > tiles.length || rocketX < 0 || rocketX > tiles[0].length || rocketX < 0)
 		{
 			alert("RANGE OVER!");
+			drawTiles(level1_map);
+			drawRocket(1, 3, 1);
 			return ;
 		}
 	}, 500);
