@@ -136,7 +136,7 @@ function moveRocket(command, rotate, opt_conditions = -1, opt_paint = -1)
 			alert("Game clear!!");
 			return ;
 		}
-		if (rocketY > tiles.length || rocketX > tiles[0].length)
+		if (rocketY > tiles.length || rocketX < 0 || rocketX > tiles[0].length || rocketX < 0)
 		{
 			alert("RANGE OVER!");
 			return ;
