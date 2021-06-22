@@ -1,15 +1,14 @@
 var canvas = document.getElementById("canvas");
 var context = canvas.getContext('2d');
-var tileOffsetTop = 30;
-var tileOffsetLeft = 30;
-var tileWidth = 30;
-var tileHeight = 30;
+var tileOffset = 30;
+var tileSide = 30;
 var tilePadding = 5;
 var tiles;
 var star;
 var flag;
 var speed;
-var f1 = [[1, 0],[]];
+/** 現在のレベル（0はじまり） */
+var n = 0;
 
 var tilechip = new Image();
 tilechip.src = './tilechip.png';
@@ -21,22 +20,49 @@ rocket.src = './rocket.png';
 
 var speed = 500;
 
-// max: 10(width)x20(height)
+/** `[f1, f2, f3]` */
+var f = [];
 
-const level1_map = [
-	[5, 2, 2, 2, 5]
-];
-const level2_map = [
-	[-1, -1, -1,  2,  5],
-	[-1, -1,  2,  2, -1],
-	[-1,  2,  2, -1, -1],
-	[ 2,  2, -1, -1, -1],
-	[ 2, -1, -1, -1, -1]
+const LEVEL = [
+	// level1
+	{
+		"board": [
+			[5, 2, 2, 2, 3]
+		],
+		"point": [
+			0, 2, 1
+		],
+		"fn": [
+			4, 0, 0
+		],
+		"timeout": 50
+	},
+	// level2
+	{
+		"board": [
+			[-1, -1, -1,  2,  5],
+			[-1, -1,  2,  2, -1],
+			[-1,  2,  2, -1, -1],
+			[ 2,  2, -1, -1, -1],
+			[ 2, -1, -1, -1, -1]
+		],
+		"point": [
+			4, 0, 0
+		],
+		"fn": [
+			4, 0, 0
+		],
+		"timeout": 50
+	}
 ];
 
-function drawTiles(set_tiles)
+function sleep(ms) {
+	return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function init()
 {
-	tiles = JSON.parse(JSON.stringify(set_tiles));
+	tiles = JSON.parse(JSON.stringify(LEVEL[n].board));
 	context.clearRect(0, 0, 800, 400);
 	star = 0;
 	for (y = 0; y < tiles.length; y++)
@@ -47,177 +73,178 @@ function drawTiles(set_tiles)
 			{
 				continue ;
 			}
-			var tileY = y * (tileHeight + tilePadding) + tileOffsetTop;
-			var tileX = x * (tileWidth  + tilePadding) + tileOffsetLeft;
-			context.drawImage(tilechip, tiles[y][x] * tileWidth, 0, tileWidth, tileHeight, tileX, tileY, tileWidth, tileHeight);
+			let tileY = y * (tileSide + tilePadding) + tileOffset;
+			let tileX = x * (tileSide + tilePadding) + tileOffset;
+			context.drawImage(tilechip, tiles[y][x] * tileSide, 0, tileSide, tileSide, tileX, tileY, tileSide, tileSide);
 			if (tiles[y][x] >= 3)
 			{
 				star += 1;
 			}
 		}
 	}
-}
-
-function drawRocket(y, x, rotate)
-{
-	var rocketNowY = (y * (tileHeight + tilePadding)) + tileOffsetTop;
-	var rocketNowX = (x * (tileWidth + tilePadding)) + tileOffsetLeft;
-	rocketY = y;
-	rocketX = x;
-	rocketRotate = rotate;
+	rocketY				= LEVEL[n].point[0];
+	rocketX				= LEVEL[n].point[1];
+	rocketRotate	= LEVEL[n].point[2];
+	let rocketNowY = (rocketY + 1) * (tileSide + tilePadding) + tileOffset;
+	let rocketNowX = (rocketX + 1) * (tileSide + tilePadding) + tileOffset;
 
 	context.save();
-	context.translate(rocketNowX - tileWidth/2 -tilePadding, rocketNowY - tileHeight/2 -tilePadding);
-	context.rotate(rotate * 90 * Math.PI/180);
-	context.drawImage(rocket, 0, 0, 75, 75, -tileWidth/2, -tileHeight/2, tileWidth, tileHeight);
+	context.translate(rocketNowX - tileSide/2 - tilePadding, rocketNowY - tileSide/2 - tilePadding);
+	context.rotate(rocketRotate * 90 * Math.PI/180);
+	context.drawImage(rocket, 0, 0, 75, 75, -tileSide/2, -tileSide/2, tileSide, tileSide);
 	context.restore();
 }
 
+
+const CHANGE = [
+	[1, 0], [0, 1], [-1, 0], [0, -1]
+]
 /**
- * Rocketの操作を反映させる関数  
- * - 引数`command`は直進するとき1の値をもつ  
- * - 引数`rotate`は方向転換の増減分（+1で90度右, -1で90度左）  
- * - 引数`opt_conditions`は初期値として-1の値をもち、移動元のタイルと比較して操作を実行するか決める  
- * - 引数`opt_paint`は初期値として-1の値をもち、値を代入されたときは移動先のタイルを指定された色に塗りかえる。  
+ * **Rocketの操作を反映させる関数**  
+ * @param {number} command 初期値として`-1`の値をもつ  
  */
-async function moveRocket(command, rotate, opt_conditions = -1, opt_paint = -1, opt_fn = -1)
+async function moveRocket(command)
 {
-	if (flag)
+	let rotate = 0;
+	if (command == 1 || command == 2)
 	{
-		return ;
+		rotate = command == 1 ? 1 : -1;
 	}
 	// x軸とy軸の増減をrotate考慮で算出
-	var y, x;
-	if (rocketRotate % 4 == 1)
+	let y = 0;
+	let x = 0;
+	if (command == 0)
 	{
-		y = 0;
-		x = command;
+		let yx = CHANGE[rocketRotate % 4];
+		y = yx[0];
+		x = yx[1];
 	}
-	else if (rocketRotate % 4 == 2)
+	else if (command > 5)
 	{
-		y = -command;
-		x = 0;
-	}
-	else if (rocketRotate % 4 == 3)
-	{
-		y = 0;
-		x = -command;
-	}
-	else if (rocketRotate % 4 == 0)
-	{
-		y = command;
-		x = 0;
+		return renderFunction(command - 6);
 	}
 
 	// 移動元のRocketとタイルは操作に寄らず一度消去
-	context.clearRect((rocketX - 1) * (tileWidth + tilePadding) + tileOffsetLeft, (rocketY - 1) * (tileHeight + tilePadding) + tileOffsetTop, tileWidth, tileHeight);
+	context.clearRect(rocketX * (tileSide + tilePadding) + tileOffset, rocketY * (tileSide + tilePadding) + tileOffset, tileSide, tileSide);
 
 	// 移動元のタイルは操作に寄らず再描画
-	var tileY = (rocketY - 1) * (tileHeight + tilePadding) + tileOffsetTop;
-	var tileX = (rocketX - 1) * (tileWidth  + tilePadding) + tileOffsetLeft;
-	context.drawImage(tilechip, tiles[rocketY - 1][rocketX - 1] * tileWidth, 0, tileWidth, tileHeight, tileX, tileY, tileWidth, tileHeight);
+	let tileY = rocketY * (tileSide + tilePadding) + tileOffset;
+	let tileX = rocketX * (tileSide + tilePadding) + tileOffset;
+	context.drawImage(tilechip, tiles[rocketY][rocketX] * tileSide, 0, tileSide, tileSide, tileX, tileY, tileSide, tileSide);
 
-	// 移動元のタイルが操作条件に合っていれば、移動後のRocketの座標を記録
-	if (opt_conditions == -1 || opt_conditions == tiles[rocketY - 1][rocketX - 1] || opt_conditions+3 == tiles[rocketY - 1][rocketX - 1])
+	// 移動していなくても、移動後の座標を記録（+0で変動しないため）
+	rocketY += y;
+	rocketX += x;
+	let rocketNowY = (rocketY + 1) * (tileSide + tilePadding) + tileOffset;
+	let rocketNowX = (rocketX + 1) * (tileSide + tilePadding) + tileOffset;
+
+	// 移動先のタイルを消去
+	context.clearRect(rocketX * (tileSide + tilePadding) + tileOffset, rocketY * (tileSide + tilePadding) + tileOffset, tileSide, tileSide);
+
+	// 移動先のtile始点座標を取得
+	tileY = rocketY * (tileSide + tilePadding) + tileOffset;
+	tileX = rocketX * (tileSide + tilePadding) + tileOffset;
+
+	// 移動先のタイルに星があればタイルを星なしのものへ変更
+	if (tiles[rocketY][rocketX] >= 3)
 	{
-		// 移動後の座標を記録
-		rocketY += y;
-		rocketX += x;
-		var rocketNowY = rocketY * (tileHeight + tilePadding) + tileOffsetTop;
-		var rocketNowX = rocketX * (tileWidth  + tilePadding) + tileOffsetLeft;
-
-		// 移動先のタイルを消去
-		context.clearRect((rocketX - 1) * (tileWidth + tilePadding) + tileOffsetLeft, (rocketY - 1) * (tileHeight + tilePadding) + tileOffsetTop, tileWidth, tileHeight);
-		tileY = (rocketY - 1) * (tileHeight + tilePadding) + tileOffsetTop;
-		tileX = (rocketX - 1) * (tileWidth  + tilePadding) + tileOffsetLeft;
-
-		// 移動先のタイルに星があればタイルを星なしのものへ変更
-		if (tiles[rocketY - 1][rocketX - 1] >= 3)
-		{
-			tiles[rocketY - 1][rocketX - 1] -= 3;
-			star -= 1;
-		}
-		// opt_paintに指定があったらその色に塗りかえる
-		// 色は0,1,2なので、-1は確実に色を指定していない
-		if (opt_paint != -1)
-		{
-			tiles[rocketY - 1][rocketX - 1] = opt_paint;
-		}
-		// 移動先のタイルを再描画
-		context.drawImage(tilechip, tiles[rocketY - 1][rocketX - 1] * tileWidth, 0, tileWidth, tileHeight, tileX, tileY, tileWidth, tileHeight);
+		tiles[rocketY][rocketX] -= 3;
+		star -= 1;
 	}
-	context.save();
-	context.translate(rocketNowX - tileWidth/2 - tilePadding, rocketNowY - tileHeight/2 - tilePadding);
-	context.rotate((rocketRotate + rotate) * 90 * Math.PI/180);
-	context.drawImage(rocket, 0, 0, 75, 75, -tileWidth/2, -tileHeight/2, tileWidth, tileHeight);
-	context.restore();
+
+	// rotateを反映させる
 	rocketRotate += rotate;
-	console.log(star);
 
-	await sleep(500);
-	if (rocketY > tiles.length || rocketX < 0 || rocketX > tiles[0].length || rocketX < 0)
+	// 色は0,1,2なので、3 > paint > -1 のときのみぬりかえ実行
+	let paint = command - 3;
+	if (3 > paint && paint > -1)
 	{
-		alert("RANGE OVER!");
-		drawTiles(level1_map);
-		drawRocket(1, 3, 1);
-		flag = 1;
+		tiles[rocketY][rocketX] = paint;
 	}
-	else if (star == 0)
-	{
-		alert("Game clear!!");
-		flag = 1;
-	}
+
+	// 移動先のタイルを再描画
+	context.drawImage(tilechip, tiles[rocketY][rocketX] * tileSide, 0, tileSide, tileSide, tileX, tileY, tileSide, tileSide);
+
+	// 移動先のRocketを再描画
+	context.save();
+	context.translate(rocketNowX - tileSide/2 - tilePadding, rocketNowY - tileSide/2 - tilePadding);
+	context.rotate(rocketRotate * 90 * Math.PI/180);
+	context.drawImage(rocket, 0, 0, 75, 75, -tileSide/2, -tileSide/2, tileSide, tileSide);
+	context.restore();
+	console.log(star);
 	return ;
 }
 
-function sleep(ms) {
-	if (flag)
+/**
+ * **`fi[j]`が実行可能か判定し、順次実行していく再帰関数**
+ * @param {number} fi `f[任意のi]`が代入されている
+ * @param {number} j `fi`の`j`番目の要素を確認するために用意された変数。  
+ * `0`始まりで`len`まで1ずつカウントアップする
+ * @param {number} len `fi`の長さ
+ */
+async function recursive(fi, j, len)
+{
+	time++;
+	if (time >= LEVEL[n].timeout || j == len || flag)
 	{
 		return ;
 	}
-	return new Promise(resolve => setTimeout(resolve, ms));
+	let command = fi[j][0];
+	let y = command == 0 ? CHANGE[rocketRotate % 4][0]+rocketY : rocketY;
+	let x = command == 0 ? CHANGE[rocketRotate % 4][1]+rocketX : rocketX;
+	let H = tiles.length - 1;
+	let W = tiles[0].length - 1;
+
+	// このLevelをクリアしたかを判定 || 移動できるかを判定
+	if (star == 0 || y > H || y < 0 || x > W || x < 0 || !~tiles[y][x])
+	{
+		await sleep(speed);
+		alert(star == 0 ? "Game clear! :D" : "Range over! :(");
+		n += star == 0 ? 1 : 0;
+		init();
+		if (star == 0) {
+			console.log("drawFunction()");
+			drawFunction()
+		};
+		flag = true;
+		return ;
+	}
+	let condition = fi[j][1];
+	// 移動元のタイルが操作条件に合っているか
+	if (!~condition || condition == tiles[rocketY][rocketX] || condition+3 == tiles[rocketY][rocketX])
+	{
+		await sleep(speed);
+		await moveRocket(command);
+	}
+	await recursive(fi, j+1, len);
 }
 
-async function testFn() {
-	flag = 0;
-	// 前に1マス進む
-	await sleep(speed);
-	moveRocket(1, 0);
+/**
+ * **f[i]を実行する関数**
+ * @param {number} i `f1,f2,f3`のうちどれを実行するかを`0`始まりで指定
+ */
+async function renderFunction(i)
+{
+	let len = f[i].length;
+	await recursive(f[i], 0, len);
+} 
 
-	// 青を緑に塗りつぶし
-	await sleep(speed);
-	moveRocket(0, 0, 2, 1);
+var time;
+/** 非同期関数 保存された操作を実行する */
+async function run(btn) {
+	btn.disabled = true;
+	time = 0;
+	flag = false;
 
-	// 前に1マス進む
-	await sleep(speed);
-	moveRocket(1, 0);
-
-	// 右に方向転換
-	await sleep(speed);
-	moveRocket(0, 1);
-
-	// 右に方向転換
-	await sleep(speed);
-	moveRocket(0, 1);
-
-	// 前に1マス進む
-	await sleep(speed);
-	moveRocket(1, 0);
-
-	// 緑を青に塗りつぶし
-	await sleep(speed);
-	moveRocket(0, 0, 1, 2);
-
-	// 前に1マス進む
-	await sleep(speed);
-	moveRocket(1, 0);
-
-	// 前に1マス進む
-	await sleep(speed);
-	moveRocket(1, 0);
-	
-
-	// 前に1マス進む
-	await sleep(speed);
-	moveRocket(1, 0);
+	// f1を実行
+	renderFunction(0)
+	.then(() => {
+		if (time >= LEVEL[n].timeout)
+		{
+			alert("Time out! :(");
+			init();
+		}
+		console.log("End");
+		btn.disabled = false;
+	})
 }

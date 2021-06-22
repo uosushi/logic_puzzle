@@ -14,25 +14,24 @@
 				overflow: scroll;
 			}
 			#control-panel {
-				background: #f8f8f8;
+				background: #ffffff;
 			}
-			option:not(selected)
-			{
+			input {
+				font-size: 1rem;
+				padding: .5rem 1.5rem;
+				background-color: #f8f8f8;
+				border-radius: .4rem;
+			}
+			input:disabled {
 				opacity: 0.5;
-			}
-			option:checked {
-				opacity: 1;
-			}
-			option:hover {
-				opacity: 1;
 			}
 		</style>
 	</head>
-	<body onLoad="drawTiles(level1_map);drawRocket(1, 3, 1);drawCommands()">
-		<h1>logic pazzle LEVEL 1</h1>
+	<body onLoad="init();drawCommands();drawFunction();">
+		<h1>logic pazzle</h1>
 		<canvas id="canvas" width="800" height="400"></canvas>
-		<canvas id="control-panel" width="800" height="150"></canvas>
-		<p><button onclick="testFn()">TEST BUTTON</button></p>
+		<canvas id="control-panel" width="800" height="200"></canvas>
+		<p><input type="button" value="RUN" onclick="run(this)"></p>
 		<script src="main.js"></script>
 		<script src="control.js"></script>
 	</body>
