@@ -50,7 +50,7 @@ const LEVEL = [
 			4, 0, 0
 		],
 		"fn": [
-			4, 0, 0
+			6, 0, 0
 		],
 		"timeout": 50
 	}
@@ -200,12 +200,15 @@ async function recursive(fi, j, len)
 	{
 		await sleep(speed);
 		alert(star == 0 ? "Game clear! :D" : "Range over! :(");
-		n += star == 0 ? 1 : 0;
-		init();
 		if (star == 0) {
-			console.log("drawFunction()");
-			drawFunction()
-		};
+			n += 1;
+			init();
+			drawFunction();
+		}
+		else
+		{
+			init();
+		}
 		flag = true;
 		return ;
 	}
